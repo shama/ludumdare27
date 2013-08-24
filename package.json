@@ -1,0 +1,35 @@
+{
+  "name": "ludumdare27",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "beefy start.js 8080 -- -d"
+  },
+  "author": "",
+  "license": "BSD",
+  "devDependencies": {
+    "beefy": "~0.4.1",
+    "gl-matrix": "~2.0.0",
+    "ndarray": "~1.0.8",
+    "gl-now": "0.0.4",
+    "gl-texture2d": "~0.1.4",
+    "gl-basic-tile-map": "0.0.0",
+    "isabella-texture-pack": "0.0.1",
+    "ndarray-fill": "~0.1.0",
+    "crtrdg-keyboard": "0.0.2",
+    "inherits": "~2.0.1",
+    "vectors": "~0.1.0",
+    "tic": "~0.2.1",
+    "draw-billboard": "0.0.2",
+    "gl-render-text": "0.0.1",
+    "propup": "~0.1.0",
+    "leveler": "~0.1.0",
+    "dom-tilemap": "~0.1.0",
+    "dom-tiles": "~0.1.0",
+    "base64-js": "0.0.2",
+    "raf": "0.0.3",
+    "tune": "~0.2.0",
+    "jsynth": "~3.0.0"
+  }
+}

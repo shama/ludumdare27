@@ -1,0 +1,33 @@
+body {
+  margin: 0px;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+  font-size: 90%;
+  background-color: #000;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+div {
+  text-align: center;
+}
+
+.stats {
+  position: fixed;
+  width: 280px;
+  height: 100%;
+  right: 0px;
+  top: 0px;
+  background-color: #333;
+  background-image: none;
+  z-index: 999;
+  padding: 10px;
+  color: #ddd;
+}
+.stats div {
+  background-image: none;
+}
+.stats .seconds {
+  font-size: 200%;
+}
