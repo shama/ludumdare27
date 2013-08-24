@@ -22,8 +22,8 @@ function Game(opts) {
   // init tiles
   var tiles = opts.tiles || {
     air: {},
-    player: { tilemap: [7, 7] },
-    enemy: { text: '%', color: '#ddd', bg: '#333' }
+    player: { tilemap: [12, 7] },
+    touched: { tilemap: [10, 8] },
   }
   this.tiles = createTiles({tiles: tiles, tilemap: terrain})
 
@@ -38,9 +38,15 @@ function Game(opts) {
   var map = require('./img/map.json')
   this.worldmap = require('./lib/worldmap')(map, function(r, g, b, a) {
     var idx = (r * 3 * 3) + (g * 3) + b
-    return (idx > 1000) ? Math.floor(((255*3*3)+(255*3)+255) / idx) + 100 : 0
+    return (idx > 1000) ? Math.floor(((255*3*3)+(255*3)+255) / idx) + 200 : 0
   })
   this.worldmap.draw(this.map.data, [10, 20])
+
+  // wall types
+  this.walls = [0]
+  this.touchCount = 0
+  this.clock = 10 * 1000
+  this.clockElement = document.getElementById('clock')
 
   // init player
   var start = [Math.floor(this.map.data.shape[0]/2), Math.floor(this.map.data.shape[1]/2)]
@@ -49,32 +55,36 @@ function Game(opts) {
   this.map.data.set(start[0], start[1], playerid)
   var lastPos = start.concat(0)
   this.player.on('move', function(to, from) {
-    if (lastPos) self.map.set(lastPos)
-    lastPos = self.player.at.concat(self.map.get(self.player.at))
+    var totile = self.map.get(to)
 
-    if (to[0] === 0) { // shift map left
-      self.worldmap.draw(self.map.data, [-self.map.data.shape[0], 0])
-      self.player.at = [self.map.data.shape[0], to[1]]
-      self.map.set(self.player.at, playerid)
-      self.map.updateAll()
-    } else if (to[1] === 0) { // shift map up
-      self.worldmap.draw(self.map.data, [0, -self.map.data.shape[1]])
-      self.player.at = [to[0], self.map.data.shape[1]]
-      self.map.set(self.player.at, playerid)
-      self.map.updateAll()
-    } else if (to[0] === self.map.data.shape[0]) { // shift map right
-      self.worldmap.draw(self.map.data, [self.map.data.shape[0], 0])
-      self.player.at = [0, to[1]]
-      self.map.set(self.player.at, playerid)
-      self.map.updateAll()
-    } else if (to[1] === self.map.data.shape[1]) { // shift map down
-      self.worldmap.draw(self.map.data, [0, self.map.data.shape[1]])
-      self.player.at = [to[0], 0]
-      self.map.set(self.player.at, playerid)
-      self.map.updateAll()
-    } else {
-      self.map.set(to, playerid)
+    // if hit a wall
+    var blocked = false
+    for (var i = 0; i < self.walls.length; i++) {
+      if (totile === self.walls[i]) {
+        blocked = true
+        break
+      }
     }
+    if (blocked) {
+      self.player.at = from
+      return
+    }
+
+    if (to[0] === 0) {
+      to = self.player.at = [self.map.data.shape[0], to[1]]
+    } else if (to[1] === 0) {
+      to = self.player.at = [to[0], self.map.data.shape[1]]
+    } else if (to[0] === self.map.data.shape[0]) { // shift map right
+      to = self.player.at = [0, to[1]]
+    } else if (to[1] === self.map.data.shape[1]) { // shift map down
+      to = self.player.at = [to[0], 0]
+    }
+
+    //if (lastPos) self.map.set(lastPos)
+    //lastPos = self.player.at.concat(self.map.get(self.player.at))
+    self.touchCount++
+    self.map.set(from, 2)
+    self.map.set(to, playerid)
 
     // shift the map - its slow
     //self.worldmap.draw(self.map.data, to)
@@ -87,27 +97,53 @@ function Game(opts) {
 
   // init sound
   this.sound = createSound()
-  /*var notes = 'ABCDEFG'.split('')
+  var notes = 'ABCDEFG'.split('')
   this.sound.load('A B D A B D C B D C F D'.split(' '))
   var track = []
   for (var i = 0; i < 99; i++) {
     track.push(notes[Math.floor(Math.random()*notes.length)])
   }
-  this.sound.load(track)*/
+  this.sound.load(track)
 
-  this.menu = require('./lib/menu')(this.map, this.tiles.index)
+  /*this.menu = require('./lib/menu')(this.map, this.tiles.index)
   this.menu.show([5, 5, 20, 10], [
     'A one',
     'B two',
-  ])
+  ])*/
 
   // update the entire grid once
   this.map.updateAll()
+
+  this.tic.setInterval(this.updateClock.bind(this), 100)
 }
 module.exports = Game
 
 Game.prototype.tick = function(dt) {
+  this.clock -= dt
+  if (this.clock <= 0) this.clock = 0
   this.player.tick(dt)
   this.tic.tick(dt)
   this.map.tick(dt)
+}
+
+Game.prototype.updateClock = function() {
+  var self = this
+
+  var s = Math.floor(this.clock / 1000).toFixed(0)
+  var m = (Math.floor(this.clock % 1000) / 100).toFixed(0)
+  if (String(m).length === 2) m = '0'
+  this.clockElement.innerHTML = s + '.' + m + 's'
+  if (this.clock <= 0) this.clockElement.style.color = '#000'
+  else this.clockElement.style.color = '#ddd'
+
+  this.sound.speed = 10 - s
+  if (this.clock <= 0) {
+    this.sound.speed = 40
+    this.tic.setTimeout(function() {
+      self.sound.speed = 1
+      self.sound.paused = true
+    }, 500)
+  } else {
+    self.sound.paused = false
+  }
 }

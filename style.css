@@ -28,6 +28,6 @@ div {
 .stats div {
   background-image: none;
 }
-.stats .seconds {
+#clock {
   font-size: 200%;
 }
