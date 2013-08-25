@@ -1,7 +1,11 @@
-var leveler = require('leveler')
-var propup = require('propup')
+//var leveler = require('leveler')
+//var propup = require('propup')
+var fs = require('fs')
 var createTic = require('tic')
 var createStats = require('./lib/stats')
+var fill = require('ndarray-fill')
+var ndarray = require('ndarray')
+var add = require('vectors/add')(2)
 //var createWorld = require('./lib/worldmap')
 
 var createTiles = require('dom-tiles')
@@ -9,6 +13,8 @@ var createTileMap = require('dom-tilemap')
 var createPlayer = require('./lib/player')
 var createText = require('./lib/text')
 var createSound = require('./lib/sound')
+var createInv = require('./lib/inv')
+var createLevels = require('./lib/levels')
 
 var terrain = require('isabella-texture-pack')
 
@@ -19,11 +25,44 @@ function Game(opts) {
 
   this.tic = createTic()
 
+  // init inventory
+  this.inv = createInv({
+    tnt: (function() {
+      var arr = ndarray(new Uint8Array(3 * 3), [3, 3])
+      fill(arr, function(x, y) {
+        return 10
+      })
+      return arr
+    }()),
+    bigbomb: (function() {
+      var arr = ndarray(new Uint8Array(5 * 5), [5, 5])
+      fill(arr, function(x, y) {
+        return 2
+      })
+      return arr
+    }()),
+    laser: (function() {
+      var arr = ndarray(new Uint8Array(64 * 64), [64, 64])
+      fill(arr, function(x, y) {
+        return (x === 32 || y === 32) ? 2 : 0
+      })
+      return arr
+    }()),
+  })
+
   // init tiles
   var tiles = opts.tiles || {
     air: {},
-    player: { tilemap: [12, 7] },
-    touched: { tilemap: [10, 8] },
+    /* 1 */  player: { tilemap: [12, 7] },
+    /* 2 */  touched: { tilemap: [10, 8] },
+    /* 3 */  ground: { tilemap: [7, 10] },
+    /* 4 */  wood: { tilemap: [4, 1] },
+    /* 5 */  brick: { tilemap: [7, 0] },
+    /* 6 */  stone: { tilemap: [0, 1] },
+    /* 7 */  start: { tilemap: [3, 13] },
+    /* 8 */  tnt: { tilemap: [8, 0] },
+    /* 9 */  gravel: { tilemap: [0, 0] },
+    /* 10 */ fire: { tilemap: [15, 2] },
   }
   this.tiles = createTiles({tiles: tiles, tilemap: terrain})
 
@@ -34,40 +73,72 @@ function Game(opts) {
   })
   document.body.appendChild(this.map.element)
 
+  // init levels
+  this.levels = createLevels([{
+    map: require('./img/level1.json'),
+    items: [
+      [10, 3, 8]
+    ]
+  }])
+
   // init worldmap
   var map = require('./img/map.json')
   this.worldmap = require('./lib/worldmap')(map, function(r, g, b, a) {
     var idx = (r * 3 * 3) + (g * 3) + b
-    return (idx > 1000) ? Math.floor(((255*3*3)+(255*3)+255) / idx) + 200 : 0
+    return (idx > 1000) ? Math.floor(((255*3*3)+(255*3)+255) / idx) + 195 : 0
   })
-  this.worldmap.draw(this.map.data, [10, 20])
+  //this.worldmap.draw(this.map.data, [10, 20])
 
-  // wall types
-  this.walls = [0]
+  // init vars
+  this.score = 0
+  this.playerid = 1
+  this.walls = [0, 4, 5, 6]
+  this.items = [8]
   this.touchCount = 0
   this.clock = 10 * 1000
   this.clockElement = document.getElementById('clock')
 
   // init player
-  var start = [Math.floor(this.map.data.shape[0]/2), Math.floor(this.map.data.shape[1]/2)]
-  var playerid = 1
-  this.player = createPlayer({at: start})
-  this.map.data.set(start[0], start[1], playerid)
-  var lastPos = start.concat(0)
+  this.player = createPlayer()
+
+  // Use inventory item
+  function useInv(pattern, which) {
+    var w = Math.floor(pattern.shape[0] / 2)
+    var h = Math.floor(pattern.shape[1] / 2)
+    for (var x = 0; x < pattern.shape[0]; x++) {
+      for (var y = 0; y < pattern.shape[1]; y++) {
+        var pos = [(x - w) + self.player.at[0], (y - h) + self.player.at[1]]
+        var tile = pattern.get(x, y)
+        if (tile > 0) self.map.set(pos, tile)
+      }
+    }
+  }
+  this.player.on('keydown', function(key) {
+    var n = parseInt(key)
+    if (!isNaN(n) && n > -1 && n < 10) {
+      self.inv.use(key, useInv)
+    }
+  })
+
+  var lastPos = false
   this.player.on('move', function(to, from) {
     var totile = self.map.get(to)
 
-    // if hit a wall
-    var blocked = false
-    for (var i = 0; i < self.walls.length; i++) {
-      if (totile === self.walls[i]) {
-        blocked = true
+    // pick up items
+    for (var i = 0; i < self.items.length; i++) {
+      if (totile === self.items[i]) {
+        self.inv.add('tnt', 1)
+        self.map.set(to, 3)
         break
       }
     }
-    if (blocked) {
-      self.player.at = from
-      return
+
+    // if hit a wall
+    for (var i = 0; i < self.walls.length; i++) {
+      if (totile === self.walls[i]) {
+        self.player.at = from
+        return
+      }
     }
 
     if (to[0] === 0) {
@@ -80,11 +151,13 @@ function Game(opts) {
       to = self.player.at = [to[0], 0]
     }
 
-    //if (lastPos) self.map.set(lastPos)
-    //lastPos = self.player.at.concat(self.map.get(self.player.at))
+    if (lastPos) self.map.set(lastPos)
+    else self.map.set(from, 7)
+    lastPos = self.player.at.concat(self.map.get(self.player.at))
     self.touchCount++
-    self.map.set(from, 2)
-    self.map.set(to, playerid)
+    //self.clock += 500
+    //self.map.set(from, 2)
+    self.map.set(to, self.playerid)
 
     // shift the map - its slow
     //self.worldmap.draw(self.map.data, to)
@@ -97,13 +170,13 @@ function Game(opts) {
 
   // init sound
   this.sound = createSound()
-  var notes = 'ABCDEFG'.split('')
+  /*var notes = 'ABCDEFG'.split('')
   this.sound.load('A B D A B D C B D C F D'.split(' '))
   var track = []
   for (var i = 0; i < 99; i++) {
     track.push(notes[Math.floor(Math.random()*notes.length)])
   }
-  this.sound.load(track)
+  this.sound.load(track)*/
 
   /*this.menu = require('./lib/menu')(this.map, this.tiles.index)
   this.menu.show([5, 5, 20, 10], [
@@ -112,7 +185,7 @@ function Game(opts) {
   ])*/
 
   // update the entire grid once
-  this.map.updateAll()
+  this.reset()
 
   this.tic.setInterval(this.updateClock.bind(this), 100)
 }
@@ -126,6 +199,17 @@ Game.prototype.tick = function(dt) {
   this.map.tick(dt)
 }
 
+Game.prototype.reset = function() {
+  this.worldmap.draw(this.map.data, [10, 20])
+  this.levels.draw(0, this.map)
+
+  var start = [Math.floor(this.map.data.shape[0]/2), Math.floor(this.map.data.shape[1]/2)]
+  this.player.at = start
+  this.map.data.set(start[0], start[1], this.playerid)
+
+  this.map.updateAll()
+}
+
 Game.prototype.updateClock = function() {
   var self = this
 
@@ -136,7 +220,10 @@ Game.prototype.updateClock = function() {
   if (this.clock <= 0) this.clockElement.style.color = '#000'
   else this.clockElement.style.color = '#ddd'
 
-  this.sound.speed = 10 - s
+  document.getElementById('score').innerHTML = this.score
+
+  this.sound.speed = 8 - (this.clock / 1000)
+  if (this.sound.speed < 1) this.sound.speed = 1
   if (this.clock <= 0) {
     this.sound.speed = 40
     this.tic.setTimeout(function() {

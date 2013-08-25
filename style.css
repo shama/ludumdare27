@@ -27,7 +27,8 @@ div {
 }
 .stats div {
   background-image: none;
+  padding: 10px 0;
 }
-#clock {
+#clock, #score {
   font-size: 200%;
 }
